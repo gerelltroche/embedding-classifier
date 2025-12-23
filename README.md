@@ -1,6 +1,6 @@
 # embedding-classifier
 
-Text embeddings with all-MiniLM-L6-v2 for semantic classification.
+Text embeddings with all-MiniLM-L6-v2 for semantic classification. DISCLAIMER: I haven't tested this, but i've done similar before.
 
 ## Install
 
@@ -58,5 +58,4 @@ await isInCategory("The stock market crashed", categoryEmbedding); // false
 ### Tips
 
 - More phrases = better category representation
-- Use negative examples as a separate embedding to filter against
 - Lower threshold = stricter matching
