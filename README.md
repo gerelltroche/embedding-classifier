@@ -21,41 +21,63 @@ const distance = compare(embeddingA, embeddingB); // 0 = identical, 2 = opposite
 
 ## Building a Category Classifier
 
-Create semantic classifiers by averaging embeddings of LLM-generated example phrases.
+Use an LLM to break down a query into conditions, then check posts against all of them.
 
-### 1. Generate category examples with an LLM
+### 1. Parse user query with an LLM
 
-Prompt:
+User input: `"Find posts like football but not NFL"`
 
-> Generate 20 short phrases matching "things related to pokemon, but not charizard" (this would be the input from the user).
-
-### 2. Create the category embedding
+Prompt a small LLM (e.g. qwen3-4b) to extract conditions:
 
 ```typescript
-const categoryEmbedding = await embed([
-  "Pikachu evolution",
-  "catching wild pokemon",
-  "gym badge collection",
-  "pokedex completion",
-  // ... more from LLM
-]);
+type Condition = { query: string; isPositive: boolean };
+
+// LLM output:
+const conditions: Condition[] = [
+  { query: "football", isPositive: true },
+  { query: "NFL", isPositive: false },
+];
 ```
 
-### 3. Classify new text
+### 2. Embed each condition
+
+```typescript
+const conditionEmbeddings = await Promise.all(
+  conditions.map(async (c) => ({
+    embedding: await embed(c.query),
+    isPositive: c.isPositive,
+  }))
+);
+```
+
+### 3. Check if a post matches ALL conditions
 
 ```typescript
 const threshold = 0.5;
 
-async function isInCategory(text: string, categoryEmb: number[]) {
-  return compare(await embed(text), categoryEmb) < threshold;
+async function matchesCategory(postText: string, conditions) {
+  const postEmb = await embed(postText);
+
+  for (const { embedding, isPositive } of conditions) {
+    const distance = compare(postEmb, embedding);
+    const isClose = distance < threshold;
+
+    // Positive conditions: post should be close
+    // Negative conditions: post should be far
+    if (isPositive !== isClose) {
+      return false;
+    }
+  }
+  return true;
 }
 
-await isInCategory("Squirtle uses water gun", categoryEmbedding); // true
-await isInCategory("Charizard breathes fire", categoryEmbedding);  // false
-await isInCategory("The stock market crashed", categoryEmbedding); // false
+await matchesCategory("College football game highlights", conditionEmbeddings); // true
+await matchesCategory("NFL draft picks announced", conditionEmbeddings);        // false
+await matchesCategory("Stock market news", conditionEmbeddings);                // false
 ```
 
 ### Tips
 
-- More phrases = better category representation
-- Lower threshold = stricter matching
+- Post must match ALL conditions (close to positives, far from negatives)
+- Adjust threshold based on your data
+- Small models like qwen3-4b can handle the condition extraction
